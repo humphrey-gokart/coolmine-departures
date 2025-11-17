@@ -158,8 +158,32 @@ body {
 }
 
 .status-delayed {
-  color: #ff3300;
+  color: #ff0000;
   animation: blink 1.5s ease-in-out infinite;
+}
+
+.delay-label {
+  display: inline-block;
+  background: #ff0000;
+  color: #000;
+  font-size: 0.7em;
+  font-weight: 900;
+  padding: 2px 6px;
+  margin-left: 8px;
+  border-radius: 3px;
+  letter-spacing: 1px;
+  animation: blinkBg 1s ease-in-out infinite;
+}
+
+@keyframes blinkBg {
+  0%, 100% { 
+    background: #ff0000;
+    opacity: 1;
+  }
+  50% { 
+    background: #cc0000;
+    opacity: 0.8;
+  }
 }
 
 @keyframes blink {
@@ -296,18 +320,49 @@ function updateClock() {
 }
 
 function createRow(train) {
-  const due = train.Duein;
   const exp = train.Exparrival || train.Schdepart || '--:--';
   const code = train.Traincode;
   const dest = train.Destination;
   const late = parseInt(train.Late || "0");
   const statusClass = late > 0 ? "status-delayed" : "status-on-time";
   
-  // Format due time
-  const dueDisplay = due === "0" ? "DUE" : `${due} min`;
+  // Calculate accurate due time based on expected arrival
+  let dueDisplay = train.Duein + " min";
+  
+  if (exp && exp !== '--:--') {
+    try {
+      const now = new Date();
+      const [expHours, expMinutes] = exp.split(':').map(Number);
+      const expectedTime = new Date();
+      expectedTime.setHours(expHours, expMinutes, 0, 0);
+      
+      // Handle trains after midnight
+      if (expectedTime < now) {
+        expectedTime.setDate(expectedTime.getDate() + 1);
+      }
+      
+      const minutesUntil = Math.round((expectedTime - now) / 60000);
+      
+      if (minutesUntil <= 0) {
+        dueDisplay = "DUE";
+      } else if (minutesUntil === 1) {
+        dueDisplay = "1 min";
+      } else {
+        dueDisplay = minutesUntil + " min";
+      }
+    } catch (e) {
+      // Fallback to API's Duein if calculation fails
+      dueDisplay = train.Duein === "0" ? "DUE" : train.Duein + " min";
+    }
+  } else {
+    dueDisplay = train.Duein === "0" ? "DUE" : train.Duein + " min";
+  }
+  
+  // Add DELAYED indicator for late trains
+  const delayLabel = late > 0 ? '<span class="delay-label">DELAYED</span>' : '';
   
   return `<div class="train-row ${statusClass}">
-    <span class="destination">${dest}</span>
+    <span class="destination">${dest} ${delayLabel}</span>
     <span class="due-time">${dueDisplay}</span>
     <span class="expected">${exp}</span>
     <span class="train-code">${code}</span>

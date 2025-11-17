@@ -73,6 +73,7 @@ body {
     inset 0 0 30px rgba(0, 0, 0, 0.8);
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .panel-header {
@@ -274,8 +275,7 @@ body {
 </div>
 
 <script>
-// Note: Direct API access may have CORS restrictions
-// If you encounter CORS errors, you may need to use a proxy or backend service
+// Using AllOrigins as a CORS proxy - works without API keys
 const API_URL = "http://api.irishrail.ie/realtime/realtime.asmx/getStationDataByNameXML?StationDesc=Coolmine";
 
 function updateClock() {
@@ -316,7 +316,10 @@ function createRow(train) {
 
 async function fetchTrains() {
   try {
-    const res = await fetch(API_URL);
+    // Using AllOrigins CORS proxy
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(API_URL)}`;
+    
+    const res = await fetch(proxyUrl);
     if (!res.ok) {
       throw new Error(`API returned status ${res.status}`);
     }

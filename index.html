@@ -58,6 +58,49 @@ body {
   font-weight: 400;
 }
 
+.station-selector {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.station-selector label {
+  font-size: 0.9em;
+  color: #ff9500;
+  font-weight: 700;
+}
+
+.station-selector select {
+  background: #000;
+  color: #ff9500;
+  border: 2px solid #ff9500;
+  padding: 8px 15px;
+  font-family: 'Orbitron', 'Courier New', monospace;
+  font-size: 0.9em;
+  border-radius: 5px;
+  cursor: pointer;
+  text-shadow: 0 0 5px rgba(255, 149, 0, 0.5);
+  transition: all 0.3s ease;
+}
+
+.station-selector select:hover {
+  background: #1a1a1a;
+  box-shadow: 0 0 10px rgba(255, 149, 0, 0.4);
+}
+
+.station-selector select:focus {
+  outline: none;
+  box-shadow: 0 0 15px rgba(255, 149, 0, 0.6);
+}
+
+.station-selector select option {
+  background: #000;
+  color: #ff9500;
+  padding: 5px;
+}
+
 .board-container {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -244,8 +287,30 @@ body {
 </head>
 <body>
 <div class="station-header">
-  <h1>Coolmine Station</h1>
+  <h1 id="station-name">Coolmine Station</h1>
   <div class="timestamp" id="current-time">Loading...</div>
+  <div class="station-selector">
+    <label for="station-select">Change Station:</label>
+    <select id="station-select">
+      <option value="Coolmine" selected>Coolmine</option>
+      <option value="Ashtown">Ashtown</option>
+      <option value="Broombridge">Broombridge</option>
+      <option value="Castleknock">Castleknock</option>
+      <option value="Clonsilla">Clonsilla</option>
+      <option value="Connolly">Connolly</option>
+      <option value="Docklands">Docklands</option>
+      <option value="Drumcondra">Drumcondra</option>
+      <option value="Grand Canal Dock">Grand Canal Dock</option>
+      <option value="Hansfield">Hansfield</option>
+      <option value="Howth">Howth</option>
+      <option value="Howth Junction">Howth Junction</option>
+      <option value="Kilbarrack">Kilbarrack</option>
+      <option value="Maynooth">Maynooth</option>
+      <option value="Pearse">Pearse</option>
+      <option value="Portmarnock">Portmarnock</option>
+      <option value="Tara Street">Tara Street</option>
+    </select>
+  </div>
 </div>
 
 <div class="board-container">
@@ -282,7 +347,7 @@ body {
 
 <script>
 // Multiple CORS proxy options with fallback
-const API_URL = "http://api.irishrail.ie/realtime/realtime.asmx/getStationDataByNameXML?StationDesc=Coolmine";
+const BASE_API_URL = "http://api.irishrail.ie/realtime/realtime.asmx/getStationDataByNameXML?StationDesc=";
 const CORS_PROXIES = [
   'https://api.allorigins.win/raw?url=',
   'https://corsproxy.io/?',
@@ -290,6 +355,7 @@ const CORS_PROXIES = [
 ];
 let currentProxyIndex = 0;
 let failureCount = 0;
+let currentStation = localStorage.getItem('selectedStation') || 'Coolmine';
 
 function updateClock() {
   const now = new Date();
@@ -360,9 +426,13 @@ function createRow(train) {
 
 async function fetchTrains() {
   try {
+    // Build API URL with current station
+    const API_URL = BASE_API_URL + encodeURIComponent(currentStation);
+    
     // Try current proxy
     const proxyUrl = `${CORS_PROXIES[currentProxyIndex]}${encodeURIComponent(API_URL)}`;
     console.log(`🔄 Fetching from proxy ${currentProxyIndex + 1}/${CORS_PROXIES.length}:`, CORS_PROXIES[currentProxyIndex]);
+    console.log(`📍 Station: ${currentStation}`);
     
     const res = await fetch(proxyUrl, { 
       signal: AbortSignal.timeout(10000) // 10 second timeout
@@ -457,6 +527,26 @@ async function fetchTrains() {
 
 // Initialize
 updateClock();
+
+// Set the saved station in the dropdown
+const stationSelect = document.getElementById('station-select');
+stationSelect.value = currentStation;
+document.getElementById('station-name').textContent = currentStation + ' Station';
+
+// Handle station changes
+stationSelect.addEventListener('change', function() {
+  currentStation = this.value;
+  localStorage.setItem('selectedStation', currentStation);
+  document.getElementById('station-name').textContent = currentStation + ' Station';
+  
+  // Show loading state
+  document.getElementById("dublin-trains").innerHTML = '<div class="loading">Loading departures...</div>';
+  document.getElementById("maynooth-trains").innerHTML = '<div class="loading">Loading departures...</div>';
+  
+  // Fetch new data immediately
+  fetchTrains();
+});
+
 fetchTrains();
 
 // Update clock every second

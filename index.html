@@ -241,16 +241,16 @@ body {
 
 /* Responsive design */
 @media (max-width: 1024px) {
-  .board-container {
-    grid-template-columns: 1fr;
-  }
-  
   .station-header h1 {
     font-size: 1.8em;
   }
 }
 
 @media (max-width: 600px) {
+  .board-container {
+    grid-template-columns: 1fr !important;
+  }
+  
   .table-header, .train-row {
     grid-template-columns: 2fr 0.5fr 0.7fr 0.9fr;
     gap: 5px;
@@ -378,36 +378,56 @@ function createRow(train) {
   const late = parseInt(train.Late || "0");
   const statusClass = late > 0 ? "status-delayed" : "status-on-time";
   
-  // Calculate accurate due time based on expected arrival
-  let dueDisplay = train.Duein + " min";
+  let dueDisplay = "---";
   
-  if (exp && exp !== '--:--') {
+  // Try to calculate accurate due time based on expected arrival
+  if (exp && exp !== '--:--' && exp.includes(':')) {
     try {
       const now = new Date();
       const [expHours, expMinutes] = exp.split(':').map(Number);
-      const expectedTime = new Date();
-      expectedTime.setHours(expHours, expMinutes, 0, 0);
       
-      // Handle trains after midnight
-      if (expectedTime < now) {
-        expectedTime.setDate(expectedTime.getDate() + 1);
-      }
-      
-      const minutesUntil = Math.round((expectedTime - now) / 60000);
-      
-      if (minutesUntil <= 0) {
-        dueDisplay = "DUE";
-      } else if (minutesUntil === 1) {
-        dueDisplay = "1 min";
-      } else {
-        dueDisplay = minutesUntil + " min";
+      // Validate hours and minutes
+      if (expHours >= 0 && expHours < 24 && expMinutes >= 0 && expMinutes < 60) {
+        const expectedTime = new Date();
+        expectedTime.setHours(expHours, expMinutes, 0, 0);
+        
+        // Handle trains after midnight
+        if (expectedTime < now) {
+          expectedTime.setDate(expectedTime.getDate() + 1);
+        }
+        
+        const minutesUntil = Math.round((expectedTime - now) / 60000);
+        
+        // Validate the result is reasonable (between -5 and 180 minutes)
+        if (minutesUntil >= -5 && minutesUntil <= 180) {
+          if (minutesUntil <= 0) {
+            dueDisplay = "DUE";
+          } else if (minutesUntil === 1) {
+            dueDisplay = "1 min";
+          } else {
+            dueDisplay = minutesUntil + " min";
+          }
+        } else {
+          // Fallback to API's Duein if calculation seems wrong
+          const apiDue = parseInt(train.Duein);
+          if (!isNaN(apiDue) && apiDue >= 0 && apiDue < 180) {
+            dueDisplay = apiDue === 0 ? "DUE" : apiDue + " min";
+          }
+        }
       }
     } catch (e) {
       // Fallback to API's Duein if calculation fails
-      dueDisplay = train.Duein === "0" ? "DUE" : train.Duein + " min";
+      const apiDue = parseInt(train.Duein);
+      if (!isNaN(apiDue) && apiDue >= 0 && apiDue < 180) {
+        dueDisplay = apiDue === 0 ? "DUE" : apiDue + " min";
+      }
     }
   } else {
-    dueDisplay = train.Duein === "0" ? "DUE" : train.Duein + " min";
+    // No expected time, use API's Duein
+    const apiDue = parseInt(train.Duein);
+    if (!isNaN(apiDue) && apiDue >= 0 && apiDue < 180) {
+      dueDisplay = apiDue === 0 ? "DUE" : apiDue + " min";
+    }
   }
   
   // Add DELAYED indicator with minutes late
@@ -484,60 +504,47 @@ async function fetchTrains() {
     if (trains.length === 0) {
       const noTrainsMsg = '<div class="no-trains">No trains currently scheduled<br><small>Check back closer to departure time</small></div>';
       document.getElementById("dublin-trains").innerHTML = noTrainsMsg;
-      document.getElementById("maynooth-trains").innerHTML = noTrainsMsg;
-      document.getElementById('destination-1-header').textContent = 'No Departures';
-      document.getElementById('destination-2-header').textContent = 'No Departures';
+      document.getElementById("maynooth-trains").innerHTML = '';
+      document.getElementById('destination-1-header').textContent = 'Next Departures';
+      document.getElementById('destination-2-header').textContent = '';
       return;
     }
     
-    // Group trains by destination
-    const destinationGroups = {};
-    trains.forEach(train => {
-      const dest = train.Destination;
-      if (!destinationGroups[dest]) {
-        destinationGroups[dest] = [];
-      }
-      destinationGroups[dest].push(train);
+    // Sort trains chronologically by due time (soonest first)
+    const sortedTrains = trains.sort((a, b) => {
+      const dueA = parseInt(a.Duein) || 999;
+      const dueB = parseInt(b.Duein) || 999;
+      return dueA - dueB;
     });
     
-    console.log('📍 Destination groups:', destinationGroups);
+    // Split into two columns for display
+    const firstColumn = sortedTrains.slice(0, 6);
+    const secondColumn = sortedTrains.slice(6, 12);
     
-    // Sort groups by number of trains (most common destinations first)
-    const sortedDestinations = Object.entries(destinationGroups)
-      .sort((a, b) => b[1].length - a[1].length);
-    
-    // Get top 2 destinations
-    const dest1Trains = sortedDestinations[0] ? sortedDestinations[0][1].slice(0, 3) : [];
-    const dest1Name = sortedDestinations[0] ? sortedDestinations[0][0] : 'No trains';
-    
-    const dest2Trains = sortedDestinations[1] ? sortedDestinations[1][1].slice(0, 3) : [];
-    const dest2Name = sortedDestinations[1] ? sortedDestinations[1][0] : 'No trains';
-    
-    console.log('✅ Showing:', {
-      destination1: dest1Name,
-      trains1: dest1Trains.length,
-      destination2: dest2Name,
-      trains2: dest2Trains.length
-    });
-    
-    // Update panel headers with destination names
-    document.getElementById('destination-1-header').textContent = `→ ${dest1Name}`;
-    document.getElementById('destination-2-header').textContent = `→ ${dest2Name}`;
+    // Update panel headers
+    document.getElementById('destination-1-header').textContent = 'Next Departures';
+    document.getElementById('destination-2-header').textContent = secondColumn.length > 0 ? 'More Departures' : '';
     
     // Update displays
     const dublinEl = document.getElementById("dublin-trains");
     const maynoothEl = document.getElementById("maynooth-trains");
+    const panel2 = maynoothEl.closest('.panel');
+    const boardContainer = document.querySelector('.board-container');
     
-    if (dest1Trains.length) {
-      dublinEl.innerHTML = dest1Trains.map(createRow).join("");
+    if (firstColumn.length) {
+      dublinEl.innerHTML = firstColumn.map(createRow).join("");
     } else {
       dublinEl.innerHTML = '<div class="no-trains">No trains scheduled</div>';
     }
     
-    if (dest2Trains.length) {
-      maynoothEl.innerHTML = dest2Trains.map(createRow).join("");
+    if (secondColumn.length) {
+      maynoothEl.innerHTML = secondColumn.map(createRow).join("");
+      panel2.style.display = 'flex';
+      boardContainer.style.gridTemplateColumns = '1fr 1fr';
     } else {
-      maynoothEl.innerHTML = '<div class="no-trains">No trains scheduled</div>';
+      maynoothEl.innerHTML = '';
+      panel2.style.display = 'none';
+      boardContainer.style.gridTemplateColumns = '1fr';
     }
     
     // Reset failure count on success

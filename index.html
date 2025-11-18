@@ -187,10 +187,11 @@ body {
   font-size: 1.05em;
 }
 
-.platform {
+.direction {
   text-align: center;
   font-weight: 900;
-  font-size: 1.1em;
+  font-size: 0.85em;
+  letter-spacing: 0.5px;
 }
 
 .due-time {
@@ -388,7 +389,7 @@ body {
     <div class="train-table">
       <div class="table-header">
         <span>Destination</span>
-        <span>Plat</span>
+        <span>Dir</span>
         <span>Due</span>
         <span>Exp</span>
       </div>
@@ -403,7 +404,7 @@ body {
     <div class="train-table">
       <div class="table-header">
         <span>Destination</span>
-        <span>Plat</span>
+        <span>Dir</span>
         <span>Due</span>
         <span>Exp</span>
       </div>
@@ -443,10 +444,19 @@ function updateClock() {
 
 function createRow(train) {
   const exp = train.Exparrival || train.Schdepart || '--:--';
-  const platform = train.Platform || '-';
   const dest = train.Destination;
   const late = parseInt(train.Late || "0");
   const statusClass = late > 0 ? "status-delayed" : "status-on-time";
+  
+  // Abbreviate direction
+  let direction = '-';
+  if (train.Direction) {
+    if (train.Direction.includes('North')) direction = 'N';
+    else if (train.Direction.includes('South')) direction = 'S';
+    else if (train.Direction.includes('East')) direction = 'E';
+    else if (train.Direction.includes('West')) direction = 'W';
+    else direction = train.Direction.substring(0, 1).toUpperCase();
+  }
   
   let dueDisplay = "---";
   
@@ -505,7 +515,7 @@ function createRow(train) {
   
   return `<div class="train-row ${statusClass}">
     <span class="destination">${dest} ${delayLabel}</span>
-    <span class="platform">${platform}</span>
+    <span class="direction">${direction}</span>
     <span class="due-time">${dueDisplay}</span>
     <span class="expected">${exp}</span>
   </div>`;
@@ -548,8 +558,7 @@ async function fetchTrains() {
       Exparrival: n.getElementsByTagName("Exparrival")[0]?.textContent || "",
       Duein: n.getElementsByTagName("Duein")[0]?.textContent || "0",
       Late: n.getElementsByTagName("Late")[0]?.textContent || "0",
-      Direction: n.getElementsByTagName("Direction")[0]?.textContent || "",
-      Platform: n.getElementsByTagName("Platform")[0]?.textContent || "-"
+      Direction: n.getElementsByTagName("Direction")[0]?.textContent || ""
     }));
     
     // Log data for debugging (you can remove this later)
@@ -560,7 +569,6 @@ async function fetchTrains() {
       trains: trains.map(t => ({
         code: t.Traincode,
         dest: t.Destination,
-        platform: t.Platform,
         direction: t.Direction,
         due: t.Duein + ' min',
         expected: t.Exparrival,

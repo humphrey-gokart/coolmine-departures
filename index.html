@@ -524,6 +524,8 @@ function createRow(train) {
 async function fetchTrains() {
   try {
     // Build API URL with current station
+    // Note: Irish Rail API is sensitive to exact station names
+    // Most station names work as-is, but check console logs if "No trains" appears
     const API_URL = BASE_API_URL + encodeURIComponent(currentStation);
     
     // Try current proxy
@@ -578,8 +580,18 @@ async function fetchTrains() {
       }))
     });
     
+    // Filter out trains that terminate at this station (destination = current station)
+    const departingTrains = trains.filter(train => {
+      // Remove "Dublin " prefix for comparison if present
+      const currentStationName = currentStation.replace('Dublin ', '');
+      const destinationName = train.Destination.replace('Dublin ', '');
+      return !destinationName.includes(currentStationName);
+    });
+    
+    console.log(`🚂 Filtered: ${trains.length} total → ${departingTrains.length} departing (removed ${trains.length - departingTrains.length} terminating trains)`);
+    
     // If no trains at all, show message
-    if (trains.length === 0) {
+    if (departingTrains.length === 0) {
       const noTrainsMsg = '<div class="no-trains">No trains currently scheduled<br><small>Check back closer to departure time</small></div>';
       document.getElementById("dublin-trains").innerHTML = noTrainsMsg;
       document.getElementById("maynooth-trains").innerHTML = '';
@@ -589,7 +601,7 @@ async function fetchTrains() {
     }
     
     // Sort trains chronologically by due time (soonest first)
-    const sortedTrains = trains.sort((a, b) => {
+    const sortedTrains = departingTrains.sort((a, b) => {
       const dueA = parseInt(a.Duein) || 999;
       const dueB = parseInt(b.Duein) || 999;
       return dueA - dueB;
